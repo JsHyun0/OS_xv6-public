@@ -23,6 +23,14 @@ struct {
   struct run *freelist;
 } kmem;
 
+/*
+HW4 step 1. getNumFreePages syscall
+*/
+uint num_free_pages;
+int
+getNumFreePages(void){
+  return num_free_pages;
+}
 // Initialization happens in two phases.
 // 1. main() calls kinit1() while still using entrypgdir to place just
 // the pages mapped by entrypgdir on free list.
@@ -33,6 +41,7 @@ kinit1(void *vstart, void *vend)
 {
   initlock(&kmem.lock, "kmem");
   kmem.use_lock = 0;
+  num_free_pages = 0;
   freerange(vstart, vend);
 }
 
@@ -66,7 +75,9 @@ kfree(char *v)
 
   // Fill with junk to catch dangling refs.
   memset(v, 1, PGSIZE);
-
+  // HW4.
+  num_free_pages++;
+  //
   if(kmem.use_lock)
     acquire(&kmem.lock);
   r = (struct run*)v;
@@ -86,6 +97,8 @@ kalloc(void)
 
   if(kmem.use_lock)
     acquire(&kmem.lock);
+  //HW4.
+  num_free_pages--;
   r = kmem.freelist;
   if(r)
     kmem.freelist = r->next;

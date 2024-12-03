@@ -7,6 +7,8 @@
 #include "mmu.h"
 #include "proc.h"
 
+extern int getNumFreePages(void);
+
 int
 sys_fork(void)
 {
@@ -88,4 +90,10 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+int
+sys_getnumfreepages(void)
+{
+  return getNumFreePages();
 }
