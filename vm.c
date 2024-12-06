@@ -10,6 +10,10 @@
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
 
+extern uint inc_refcount(uint pa);
+extern uint dec_refcount(uint pa);
+extern uint get_refcount(uint pa);
+
 // Set up CPU's kernel segment descriptors.
 // Run once on entry on each CPU.
 void
@@ -318,32 +322,26 @@ copyuvm(pde_t *pgdir, uint sz)
   pde_t *d;
   pte_t *pte;
   uint pa, i, flags;
-  // char *mem;
+  //char *mem;
 
+  // setupkvm : 페이지 디렉터리 생성
   if((d = setupkvm()) == 0)
     return 0;
-
+  
   for(i = 0; i < sz; i += PGSIZE){
+		//walkpgdir : 부모 프로세스 테이블에서 i에 해당하는 PTE 탐색
     if((pte = walkpgdir(pgdir, (void *) i, 0)) == 0)
       panic("copyuvm: pte should exist");
     if(!(*pte & PTE_P))
       panic("copyuvm: page not present");
-    
-    //읽기 권한 제거
+
+    *pte &= ~PTE_W; //Write 권한 제거
     pa = PTE_ADDR(*pte);
     flags = PTE_FLAGS(*pte);
-    *pte &= ~PTE_W;
-    // 물리 페이지를 새롭게 할당하지 않음
-    // if((mem = kalloc()) == 0)
-    //   goto bad;
-    // memmove(mem, (char*)P2V(pa), PGSIZE);
 
-    //자식프로세스에게 기존의 물리 페이지를 할당
-    //page d의 i번째에 PGSIZE만큼 물리 페이지 pa를 할당
-    if(mappages(d, (void*)i, PGSIZE, pa, flags) < 0) {
-      // kfree(mem);
+    // mappages : 자식 프로세스의 페이지 테이블에 새로운 물리 페이지 매핑
+    if(mappages(d, (void*)i, PGSIZE, pa, flags) < 0) 
       goto bad;
-    }
     inc_refcount(pa);
   }
   lcr3(V2P(pgdir));
@@ -353,38 +351,6 @@ bad:
   freevm(d);
   return 0;
 }
-
-//HW4. page fault handler function
-void
-pagefault()
-{
-  struct proc* curproc = myproc();
-  uint va, pa, refcnt;
-  pte_t *pte;
-  va = rcr2();
-  
-  if((pte = walkpgdir(curproc->pgdir, (void *)va, 0)) == 0)
-    panic("PTE should exist");
-  
-  pa = PTE_ADDR(*pte);
-  refcnt = get_refcount(pa);
-
-  //if refcount == 1, just write
-  if(refcnt == 1)
-    *pte |= PTE_W;
-
-  //elif over 1, Copy-On-Write
-  else if(refcnt > 1){
-    char *mem;
-    //mem에 새로운 쓰기 영역을 할당하고, pa의 refcount는 감소시킨다.
-    if((mem = kalloc()) == 0) return;
-    memmove(mem, (char *)P2V(pa), PGSIZE);
-    *pte = V2P(mem) | PTE_P | PTE_W | PTE_U;
-    dec_refcount(pa);
-  }
-  lcr3(V2P(curproc->pgdir));
-}
-
 
 //PAGEBREAK!
 // Map user virtual address to kernel address.
@@ -427,10 +393,29 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
   return 0;
 }
 
-//PAGEBREAK!
-// Blank page.
-//PAGEBREAK!
-// Blank page.
-//PAGEBREAK!
-// Blank page.
+void 
+pagefault()
+{
+  uint va, pa, refcnt;
+  pte_t* pte;
+  
+  va = rcr2(); //pagefault가 발생한 가상 주소를 불러옴
+  if(va == 0) return;
+  if(myproc() == 0) return;
 
+  if((pte = walkpgdir(myproc()->pgdir, (void*)va, 0)) == 0)
+    panic("page fault : pte should exist");
+
+  pa = PTE_ADDR(*pte); //물리 주소를 찾는다.
+  refcnt = get_refcount(pa);
+
+  if(refcnt == 1) *pte |= PTE_W;
+  else if(refcnt > 1) {
+    char *mem;
+    if((mem = kalloc()) == 0) return;
+    memmove(mem, (char*)P2V(pa), PGSIZE);
+    *pte = V2P(mem) | PTE_P | PTE_W | PTE_U;
+    dec_refcount(pa);
+  }
+  lcr3(V2P(myproc()->pgdir));
+}

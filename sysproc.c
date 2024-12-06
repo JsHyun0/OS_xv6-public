@@ -7,8 +7,6 @@
 #include "mmu.h"
 #include "proc.h"
 
-extern int getNumFreePages(void);
-
 int
 sys_fork(void)
 {
@@ -93,7 +91,57 @@ sys_uptime(void)
 }
 
 int
-sys_getnumfreepages(void)
+sys_forknexec(void)
 {
-  return getNumFreePages();
+  char *path, *argv[MAXARG];
+  int i;
+  uint uargv, uarg;
+
+  if(argstr(0, &path) < 0 || argint(1, (int*)&uargv) < 0){
+    return -1;
+  }
+  memset(argv, 0, sizeof(argv));
+  for(i=0;; i++){
+    if(i >= NELEM(argv))
+      return -1;
+    if(fetchint(uargv+4*i, (int*)&uarg) < 0)
+      return -1;
+    if(uarg == 0){
+      argv[i] = 0;
+      break;
+    }
+    if(fetchstr(uarg, &argv[i]) < 0)
+      return -1;
+  }
+  return forknexec(path, (const char**)argv);
+}
+
+int 
+sys_set_proc_priority(void)
+{
+  int pid, val;
+  if(argint(0, &pid) < 0 || argint(1, &val) < 0)
+    return -1;
+  return set_proc_priority(pid, val);
+}
+
+int 
+sys_get_proc_priority(void)
+{
+  int pid;
+  if(argint(0, &pid) < 0)
+    return -1;
+  return get_proc_priority(pid);
+}
+
+int
+sys_ps(void)
+{
+  return ps();
+}
+
+int
+sys_get_numfreepages(void)
+{
+  return get_numfreepages();
 }

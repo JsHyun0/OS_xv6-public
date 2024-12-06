@@ -23,7 +23,11 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
-int getnumfreepages(void);
+int forknexec(const char*, const char**);
+int set_proc_priority(int pid, int val);
+int get_proc_priority(int pid);
+int ps(void);
+int get_numfreepages(void);
 
 // ulib.c
 int stat(const char*, struct stat*);

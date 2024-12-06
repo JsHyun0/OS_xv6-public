@@ -20,45 +20,34 @@ struct run {
 struct {
   struct spinlock lock;
   int use_lock;
-  struct run *freelist;
-  uint pgrefcount[PHYSTOP >> PTXSHIFT];
   uint num_free_pages;
+  uint pgrefcount[PHYSTOP >> PGSHIFT];
+  struct run *freelist;
 } kmem;
 
-/*
-HW4 step 1. getNumFreePages syscall
-*/
 
 int
-getNumFreePages(void){
+get_numfreepages(void)
+{
   return kmem.num_free_pages;
 }
-// HW4 step 2. reference Counter
 
-// get page Reference count for Physical Address
 uint 
 get_refcount(uint pa)
 {
-  return kmem.pgrefcount[pa>>PTXSHIFT];
-}
-void
-inc_refcount(uint pa)
-{
-  if(kmem.use_lock)
-      acquire(&kmem.lock);
-  kmem.pgrefcount[pa>>PTXSHIFT] += 1;
-  if(kmem.use_lock)
-      release(&kmem.lock);
+  return kmem.pgrefcount[pa >> PGSHIFT];
 }
 
 void
 dec_refcount(uint pa)
 {
-  if(kmem.use_lock)
-      acquire(&kmem.lock);
-  kmem.pgrefcount[pa>>PTXSHIFT] -= 1;
-  if(kmem.use_lock)
-      release(&kmem.lock);
+  --kmem.pgrefcount[pa >> PGSHIFT];
+}
+
+void
+inc_refcount(uint pa)
+{
+  ++kmem.pgrefcount[pa >> PGSHIFT];
 }
 
 // Initialization happens in two phases.
@@ -71,7 +60,7 @@ kinit1(void *vstart, void *vend)
 {
   initlock(&kmem.lock, "kmem");
   kmem.use_lock = 0;
-  kmem.num_free_pages = 0;
+  kmem.num_free_pages = 0;  //FREE PAGES 개수 초기화@@@@@@@@@@@@@
   freerange(vstart, vend);
 }
 
@@ -87,10 +76,10 @@ freerange(void *vstart, void *vend)
 {
   char *p;
   p = (char*)PGROUNDUP((uint)vstart);
-  
-  for(; p + PGSIZE <= (char*)vend; p += PGSIZE) {
+  for(; p + PGSIZE <= (char*)vend; p += PGSIZE)
+  {
     kfree(p);
-    kmem.pgrefcount[V2P(p)>>PTXSHIFT] = 0;
+    kmem.pgrefcount[V2P(p) >> PGSHIFT] = 0; //pgrefcount 0으로 초기화@@@@@@@@@@@@ 
   }
 }
 //PAGEBREAK: 21
@@ -101,30 +90,28 @@ freerange(void *vstart, void *vend)
 void
 kfree(char *v)
 {
-  struct run *r;
+  struct run *r = 0;
 
   if((uint)v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
     panic("kfree");
 
-  if(get_refcount(V2P(v)) > 0)
+  if(kmem.use_lock)
+      acquire(&kmem.lock);
+
+  if(get_refcount(V2P(v)) > 0)   //0보다 크면, REFCOUNT만 감소
     dec_refcount(V2P(v));
-  
-  // HW4 Step 2. if no proc reference page v
-  if(get_refcount(V2P(v)) == 0) {
+    
+  if(get_refcount(V2P(v)) == 0) //0이면, free
+  {  
     // Fill with junk to catch dangling refs.
     memset(v, 1, PGSIZE);
-    // HW4. Step 1.
-    kmem.num_free_pages++;
-    //
-    if(kmem.use_lock)
-      acquire(&kmem.lock);
-    r = (struct run*)v;
+    kmem.num_free_pages++;  //FREE PAGES 개수 증가
+    r = (struct run*)v; 
     r->next = kmem.freelist;
     kmem.freelist = r;
-    if(kmem.use_lock)
-      release(&kmem.lock);
   }
-  
+  if(kmem.use_lock)
+    release(&kmem.lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -137,18 +124,13 @@ kalloc(void)
 
   if(kmem.use_lock)
     acquire(&kmem.lock);
-  //HW4. Step 1.
-  
   r = kmem.freelist;
-  
-  if(r) {
+  if(r){
     kmem.freelist = r->next;
-    // HW4 Step 2.
-    kmem.pgrefcount[V2P(r) >> PTXSHIFT] = 1;
-    kmem.num_free_pages--;
+    kmem.num_free_pages--;  //FREE PAGES 개수 감소 @@@@@@@@@@@@
+    kmem.pgrefcount[V2P(r) >> PGSHIFT] = 1; //1으로 지정 @@@@@@@@@@@@@  
   }
   if(kmem.use_lock)
     release(&kmem.lock);
   return (char*)r;
 }
-

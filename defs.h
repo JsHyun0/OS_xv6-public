@@ -68,11 +68,7 @@ char*           kalloc(void);
 void            kfree(char*);
 void            kinit1(void*, void*);
 void            kinit2(void*, void*);
-int             getnumfreepages(void);
-uint            get_refcount(uint);
-void            inc_refcount(uint);
-void            dec_refcount(uint);
-
+int             get_numfreepages(void);
 
 // kbd.c
 void            kbdintr(void);
@@ -125,6 +121,10 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+int 			forknexec(const char* path, const char **args);
+int             set_proc_priority(int pid, int val);
+int             get_proc_priority(int pid);
+int             ps(void);
 
 // swtch.S
 void            swtch(struct context**, struct context*);

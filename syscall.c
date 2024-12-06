@@ -103,7 +103,11 @@ extern int sys_unlink(void);
 extern int sys_wait(void);
 extern int sys_write(void);
 extern int sys_uptime(void);
-extern int sys_getnumfreepages(void);
+extern int sys_forknexec(void);
+extern int sys_set_proc_priority(void);
+extern int sys_get_proc_priority(void);
+extern int sys_ps(void);
+extern int sys_get_numfreepages(void);
 
 static int (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -127,7 +131,11 @@ static int (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
-[SYS_getnumfreepages] sys_getnumfreepages,
+[SYS_forknexec] sys_forknexec,
+[SYS_set_proc_priority] sys_set_proc_priority,
+[SYS_get_proc_priority] sys_get_proc_priority,
+[SYS_ps] sys_ps,
+[SYS_get_numfreepages] sys_get_numfreepages
 };
 
 void
